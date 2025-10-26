@@ -8,6 +8,8 @@
 #define IP "127.0.0.1"
 #define port 5000
 #define CACHE_SIZE 5
+// I should be able to generate two different workloads, one that is CPU bound, and other that is I/O bound.
+
 
 // check browser on http://127.0.0.1/5000
 
@@ -17,8 +19,14 @@
 // from it. Choosing the FCFS replacement policy because it is easy to implement. We need to store separately the order in
 // which the keys arrive (stored in queue_of_keys queue).
 
+// Since it is a key-value type data, relational databases may not be perfectly suitable here. So using NoSQL database
+// Apache Cassandra (free and open source).
+// Installing instructions:  https://cassandra.apache.org/doc/latest/cassandra/installing/installing.html.
+// If cassandra hangs the system, then the OOM is killing cassandra because it is demanding too much heap. Reduce its max heap size (use gpt).
+// Cassandra takes 20 to 60 seconds to load after boot, so wait.
 
-int main() {
+int main() 
+{
     httplib::Server svr;
     std::unordered_map<int, std::string> CACHE; // Hash table as a cache to store kv pairs.
     std::list<int> queue_of_keys; // stores the order in which keys arrive. std::list is implemented as a doubly-linked list.
