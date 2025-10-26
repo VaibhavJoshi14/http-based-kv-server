@@ -48,7 +48,6 @@ int main() {
             auto res = cli.Post("/create", params);
             if (res)
             {
-                std::cout << res->status << "\n";
                 std::cout << res->body << "\n";
             } 
             else
@@ -63,7 +62,6 @@ int main() {
             auto res = cli.Get("/read?key=" + token); // send the key via a GET request
             if (res)
             {
-                std::cout << res->status << "\n";
                 std::cout << res->body << "\n";
             } 
             else
@@ -79,7 +77,6 @@ int main() {
             auto res = cli.Post("/delete", params);
             if (res)
             {
-                std::cout << res->status << "\n";
                 std::cout << res->body << "\n";
             } 
             else
