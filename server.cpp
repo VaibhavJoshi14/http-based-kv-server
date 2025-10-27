@@ -4,12 +4,14 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <fstream>
 
 #define IP "127.0.0.1"
 #define port 5000
 #define CACHE_SIZE 5
 // I should be able to generate two different workloads, one that is CPU bound, and other that is I/O bound.
-
+// 1. Uploading an image to a server (IO bottleneck in the database server).
+// 2. Rotate an image in the server (that user sends) and send it as a response (CPU bottleneck in the server). Optionally send the response to be saved/updated in the database.
 
 // check browser on http://127.0.0.1/5000
 
@@ -25,7 +27,7 @@
 // If cassandra hangs the system, then the OOM is killing cassandra because it is demanding too much heap. Reduce its max heap size (use gpt).
 // Cassandra takes 20 to 60 seconds to load after boot, so wait.
 
-int main() 
+int main()
 {
     httplib::Server svr;
     std::unordered_map<int, std::string> CACHE; // Hash table as a cache to store kv pairs.
@@ -36,13 +38,19 @@ int main()
         res.set_content("Hello, You have connected to an http-based Key-Value server.", "text/plain");
     });
     
-    // For the "create" command
+    // For the "create" command.
     svr.Post("/create", [&](const httplib::Request& req, httplib::Response& res) {
-        int key = std::stoi(req.get_param_value("key"));
-        std::string value = req.get_param_value("value");
-        std::cout << "Received " << key << " " <<value << "\n";
-        fflush(stdout);
-        m.lock();
+        auto it = req.form.files.find("file");
+        
+        const auto& file = it->second;
+        std::ofstream ofs(file.filename, std::ios::binary);
+        ofs << file.content;
+        ofs.close();
+        res.set_content("File uploaded successfully", "text/plain");
+
+        res.set_content("Done", "text/plain");
+        
+        /*m.lock();
         
         if (0) // If key is already present in database.
         {
@@ -63,6 +71,7 @@ int main()
         
         m.unlock();
         res.set_content("Done", "text/plain");
+        */
     });
 
     // For the "read" command
