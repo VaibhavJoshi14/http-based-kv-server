@@ -1,18 +1,4 @@
 /*
-key is an integer, and value is a string.
-
-create <key> <value>
-create 1 hello world
-
-read <key>
-read 1
-
-delete <key>
-delete 1
-*/
-
-/*
-
 key is a string, value is the path to an image (only 256x256 jpg images allowed).
 key can be simply the name of the image.
 
@@ -39,7 +25,7 @@ rotate2 takes the image <key> from database, and saves it in the database (does 
 
 */
 
-#include "httplib.h"
+#include "include/httplib.h"
 #include <fstream>
 
 #define SERVER_ADDRESS "http://127.0.0.1:5000"
