@@ -78,9 +78,8 @@ int main() {
 
             // Multipart form upload
             httplib::UploadFormDataItems items = {
-                {"file", data, key, "text/plain"}
+                {"file", data, key, "image/jpg"}
             };
-
 
             auto res = cli.Post("/create", items);
             if (res)
@@ -115,6 +114,34 @@ int main() {
             if (res)
             {
                 std::cout << res->body << "\n";
+            } 
+            else
+            {
+                std::cout << "Request failed\n";
+            }
+        }
+        else if (token == "rotate")
+        {
+            std::string angle, path;
+            std::getline(iss, angle, ' ');
+            std::getline(iss, path, '\0');
+        
+            // Read the image file as a string
+            std::ifstream file(path, std::ios::binary);
+            std::string img((std::istreambuf_iterator<char>(file)),
+                     std::istreambuf_iterator<char>());
+
+            // Multipart form upload
+            httplib::UploadFormDataItems items = {
+                {"file", img, angle, "image/jpg"}
+            };
+
+            auto res = cli.Post("/rotate", items);
+            if (res)
+            {
+                std::ofstream ofs("rotated.jpg", std::ios::binary);
+                ofs << res->body;
+                ofs.close();
             } 
             else
             {

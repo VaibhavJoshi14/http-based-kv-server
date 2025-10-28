@@ -5,6 +5,10 @@
 #include <queue>
 #include <string>
 #include <fstream>
+#include <opencv2/opencv.hpp>
+#include <vector>
+
+using namespace cv;
 
 #define IP "127.0.0.1"
 #define port 5000
@@ -30,8 +34,8 @@
 int main()
 {
     httplib::Server svr;
-    std::unordered_map<int, std::string> CACHE; // Hash table as a cache to store kv pairs.
-    std::list<int> queue_of_keys; // stores the order in which keys arrive. std::list is implemented as a doubly-linked list.
+    std::unordered_map<std::string, std::string> CACHE; // Hash table as a cache to store kv pairs.
+    std::list<std::string> queue_of_keys; // stores the order in which keys arrive. std::list is implemented as a doubly-linked list.
     std::mutex m; // lock used when storing data into CACHE.
 
     svr.Get("/welcome", [&](const httplib::Request&, httplib::Response& res) {
@@ -41,16 +45,17 @@ int main()
     // For the "create" command.
     svr.Post("/create", [&](const httplib::Request& req, httplib::Response& res) {
         auto it = req.form.files.find("file");
-        
         const auto& file = it->second;
-        std::ofstream ofs(file.filename, std::ios::binary);
-        ofs << file.content;
-        ofs.close();
-        res.set_content("File uploaded successfully", "text/plain");
 
-        res.set_content("Done", "text/plain");
+        std::string key = file.filename;
+        std::string value = file.content; // value is the image
+
+        // would not need this later.
+        std::ofstream ofs(key, std::ios::binary);
+        ofs << value;
+        ofs.close();
         
-        /*m.lock();
+        m.lock();
         
         if (0) // If key is already present in database.
         {
@@ -61,7 +66,7 @@ int main()
         
         if (CACHE.size() == CACHE_SIZE) // evict an element when cache is full.
         {
-            int front = queue_of_keys.front();
+            std::string front = queue_of_keys.front();
             CACHE.erase(front); // FCFS policy.
             queue_of_keys.pop_front(); 
         }
@@ -70,15 +75,13 @@ int main()
         CACHE[key] = value;
         
         m.unlock();
-        res.set_content("Done", "text/plain");
-        */
+        res.set_content("File uploaded successfully", "text/plain");
     });
 
     // For the "read" command
     svr.Get("/read", [&](const httplib::Request& req, httplib::Response& res) {
-        int key = std::stoi(req.get_param_value("key"));
+        std::string key = req.get_param_value("key");
         std::string value;
-        std::cout << "Received " << key << "\n";
         fflush(stdout);
         
         m.lock();
@@ -98,8 +101,7 @@ int main()
 
     // For the "delete" command
     svr.Post("/delete", [&](const httplib::Request& req, httplib::Response& res) {
-        int key = std::stoi(req.get_param_value("key"));
-        std::cout << "Received " << key << "\n";
+        std::string key = req.get_param_value("key");
         fflush(stdout);
         
         m.lock();
@@ -115,6 +117,51 @@ int main()
         m.unlock();
         
         res.set_content("Done", "text/plain");
+    });
+
+    // For the rotate command: which takes an image and an angle as an input and rotates the image by that angle in counter-clockwise direction.
+    svr.Post("/rotate", [&](const httplib::Request& req, httplib::Response& res){
+        auto it = req.form.files.find("file");
+        const auto& file = it->second;
+
+        int angle = std::stoi(file.filename);
+        std::string img_data = file.content;
+
+        // Convert binary string to vector<uchar> for OpenCV decoding
+        std::vector<uchar> buffer(img_data.begin(), img_data.end());
+
+        // Decode image from memory
+        Mat img = imdecode(buffer, IMREAD_COLOR);
+        if (img.empty()) {
+            std::cerr << "Error: could not decode image data." << std::endl;
+            return -1;
+        }
+
+        // Get the rotation matrix
+        Point2f center(img.cols / 2.0F, img.rows / 2.0F);
+
+        Mat rotation_matrix = getRotationMatrix2D(center, angle, 1);
+
+        // Compute bounding box so that the rotated image fits completely
+        Rect2f bbox = RotatedRect(Point2f(), img.size(), angle).boundingRect2f();
+
+        // Adjust transformation matrix to keep image centered
+        rotation_matrix.at<double>(0, 2) += bbox.width / 2.0 - img.cols / 2.0;
+        rotation_matrix.at<double>(1, 2) += bbox.height / 2.0 - img.rows / 2.0;
+
+        // Apply the rotation
+        Mat rotated;
+        warpAffine(img, rotated, rotation_matrix, bbox.size());
+
+        // Encode rotated image back to binary string (e.g. JPEG)
+        std::vector<uchar> out_buf;
+        imencode(".jpg", rotated, out_buf);
+
+        // Convert back to std::string
+        std::string rotated_data(out_buf.begin(), out_buf.end());
+
+        res.set_content(rotated_data, "image/jpg");
+        std::cout << "Rotated data saved in rotated.jpg\n";
     });
 
     std::cout << "Server started at "<< IP << ":"<< port <<"\n";
