@@ -1,4 +1,6 @@
-#include "httplib.h"
+// compile using 
+// g++ server.cpp -o server `pkg-config --cflags --libs opencv4`
+#include "include/httplib.h"
 #include <iostream>
 #include <unordered_map>
 #include <mutex>
