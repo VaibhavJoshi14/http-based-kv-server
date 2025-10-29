@@ -88,6 +88,10 @@ int main() {
                     std::cout << res->body << "\n";
                     continue;
                 }
+                if (res->body == "An error occurred in the database."){
+                    std::cout << res->body << "\n";
+                    continue;
+                }
                 std::ofstream ofs(token, std::ios::binary);
                 ofs << res->body;
                 ofs.close();

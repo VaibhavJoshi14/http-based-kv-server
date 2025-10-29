@@ -78,20 +78,22 @@ int main()
         //ofs << value;
         //ofs.close();
         
-        m.lock();
-        
         // Read if the key is already present in database
         auto res2 = db_cli.Get("/read?key=" + key);
+        if (!res2 || res2->status != 200){
+            std::cout << "Error while accessing database.\n";
+            res.set_content("An error occurred in the database.", "text/plain");
+            return;
+        }
         if (res2->body != "Key does not exist.") // If key is already present in database.
         {
-            m.unlock();
             res.set_content("Key already present", "text/plain");
             return;
         }
         
         // Store the key-value pair in cache since it is a recently used item.
+        m.lock();
         store_in_cache(CACHE, queue_of_keys, key, value);
-
         m.unlock();
 
         // Multipart form upload
@@ -101,8 +103,11 @@ int main()
 
         // send to database for persistent storage
         auto res3 = db_cli.Post("/create", items);
-        if (!res3){
+        if (!res3 || res3->status != 200)
+        {
             std::cout << "Error: Could not create key in database.";
+            res.set_content("An error occurred in the database.", "text/plain");
+            return;
         }
 
         res.set_content("File uploaded successfully", "text/plain");
@@ -125,7 +130,13 @@ int main()
         {
             m.unlock();
             auto res2 = db_cli.Get("/read?key=" + key);
-            /// Store the key-value pair in cache since it is not in cache
+            if (!res2 || res2->status != 200) 
+            {
+                std::cout << "Error in database while reading\n";
+                res.set_content("An error occurred in the database.", "text/plain");
+                return;
+            }
+            // Store the key-value pair in cache since it is not in cache
             store_in_cache(CACHE, queue_of_keys, key, res2->body);
             res.set_content(res2->body, "image/jpeg");
         }
@@ -136,19 +147,22 @@ int main()
         std::string key = req.get_param_value("key");
         fflush(stdout);
         
+        // delete from cache.
         m.lock();
-        if (CACHE.count(key))
-        {
-            // erase from cache.
-            CACHE.erase(key);
-            
-            // erase the corresponding entry in queue_of_keys.
-            queue_of_keys.remove(key);
-        }
-        // delete from the database.
+        CACHE.erase(key);
+        queue_of_keys.remove(key);
         m.unlock();
-        
-        res.set_content("Done", "text/plain");
+
+        // delete from the database.
+        httplib::Params params;
+        params.emplace("key", key);
+        auto res2 = db_cli.Post("/delete", params);
+        if (!res2 || res2->status != 200) 
+        {
+            std::cout << "Error in database while deleting the file\n";
+            res.set_content("An error occurred in the database.", "text/plain");
+        }
+        else res.set_content("Image deleted successfully.", "text/plain");
     });
 
     // For the rotate command: which takes an image and an angle as an input and rotates the image by that angle in counter-clockwise direction.
@@ -166,7 +180,8 @@ int main()
         Mat img = imdecode(buffer, IMREAD_COLOR);
         if (img.empty()) {
             std::cerr << "Error: could not decode image data." << std::endl;
-            return -1;
+            res.set_content("Error: could not decode image data.", "text/plain");
+            return;
         }
 
         // Get the rotation matrix
