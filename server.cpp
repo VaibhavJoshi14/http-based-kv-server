@@ -15,6 +15,7 @@ using namespace cv;
 #define IP "127.0.0.1"
 #define port 5000
 #define CACHE_SIZE 5
+#define DATABASE_ADDRESS "http://127.0.0.1:5001"
 // I should be able to generate two different workloads, one that is CPU bound, and other that is I/O bound.
 // 1. Uploading an image to a server (IO bottleneck in the database server).
 // 2. Rotate an image in the server (that user sends) and send it as a response (CPU bottleneck in the server). Optionally send the response to be saved/updated in the database.
@@ -33,13 +34,33 @@ using namespace cv;
 // If cassandra hangs the system, then the OOM is killing cassandra because it is demanding too much heap. Reduce its max heap size (use gpt).
 // Cassandra takes 20 to 60 seconds to load after boot, so wait.
 
+// Server will connect to the database using http-based requests via tcp connection (not using rpc).
+
+// This function stores a (key, value) pair in the cache, evicting a pair if cache is already full.
+void store_in_cache(std::unordered_map<std::string, std::string>& CACHE,
+                    std::list<std::string>& queue_of_keys, 
+                    std::string& key, 
+                    std::string& value)
+{
+    if (CACHE.size() == CACHE_SIZE) // evict an element when cache is full.
+    {
+        std::string front = queue_of_keys.front();
+        CACHE.erase(front); // FCFS policy.
+        queue_of_keys.pop_front(); 
+    }
+
+    queue_of_keys.push_back(key);
+    CACHE[key] = value;
+}
+
 int main()
 {
     httplib::Server svr;
     std::unordered_map<std::string, std::string> CACHE; // Hash table as a cache to store kv pairs.
     std::list<std::string> queue_of_keys; // stores the order in which keys arrive. std::list is implemented as a doubly-linked list.
     std::mutex m; // lock used when storing data into CACHE.
-
+    httplib::Client db_cli(DATABASE_ADDRESS);
+    
     svr.Get("/welcome", [&](const httplib::Request&, httplib::Response& res) {
         res.set_content("Hello, You have connected to an http-based Key-Value server.", "text/plain");
     });
@@ -52,31 +73,38 @@ int main()
         std::string key = file.filename;
         std::string value = file.content; // value is the image
 
-        // would not need this later.
-        std::ofstream ofs(key, std::ios::binary);
-        ofs << value;
-        ofs.close();
+        // only kept for debugging.
+        //std::ofstream ofs(key, std::ios::binary);
+        //ofs << value;
+        //ofs.close();
         
         m.lock();
         
-        if (0) // If key is already present in database.
+        // Read if the key is already present in database
+        auto res2 = db_cli.Get("/read?key=" + key);
+        if (res2->body != "Key does not exist.") // If key is already present in database.
         {
             m.unlock();
             res.set_content("Key already present", "text/plain");
             return;
         }
         
-        if (CACHE.size() == CACHE_SIZE) // evict an element when cache is full.
-        {
-            std::string front = queue_of_keys.front();
-            CACHE.erase(front); // FCFS policy.
-            queue_of_keys.pop_front(); 
+        // Store the key-value pair in cache since it is a recently used item.
+        store_in_cache(CACHE, queue_of_keys, key, value);
+
+        m.unlock();
+
+        // Multipart form upload
+        httplib::UploadFormDataItems items = {
+            {"file", value, key, "image/jpeg"}
+        };
+
+        // send to database for persistent storage
+        auto res3 = db_cli.Post("/create", items);
+        if (!res3){
+            std::cout << "Error: Could not create key in database.";
         }
 
-        queue_of_keys.push_back(key);
-        CACHE[key] = value;
-        
-        m.unlock();
         res.set_content("File uploaded successfully", "text/plain");
     });
 
@@ -84,21 +112,23 @@ int main()
     svr.Get("/read", [&](const httplib::Request& req, httplib::Response& res) {
         std::string key = req.get_param_value("key");
         std::string value;
-        fflush(stdout);
         
         m.lock();
         if (CACHE.count(key)) // If key is already in cache, then fetch from it directly.
         {
+            //std::cout << "CACHE used\n"; // used for debugging
             value = CACHE[key];
+            m.unlock();
+            res.set_content(value, "image/jpeg");
         }
         else // Else fetch from database.
         {
-            
-            // If database does not have that value, then return "Key does not exist".
+            m.unlock();
+            auto res2 = db_cli.Get("/read?key=" + key);
+            /// Store the key-value pair in cache since it is not in cache
+            store_in_cache(CACHE, queue_of_keys, key, res2->body);
+            res.set_content(res2->body, "image/jpeg");
         }
-        m.unlock();
-        
-        res.set_content(value, "text/plain");
     });
 
     // For the "delete" command
@@ -162,8 +192,7 @@ int main()
         // Convert back to std::string
         std::string rotated_data(out_buf.begin(), out_buf.end());
 
-        res.set_content(rotated_data, "image/jpg");
-        std::cout << "Rotated data saved in rotated.jpg\n";
+        res.set_content(rotated_data, "image/jpeg");
     });
 
     std::cout << "Server started at "<< IP << ":"<< port <<"\n";

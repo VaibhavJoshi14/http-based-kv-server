@@ -84,7 +84,14 @@ int main() {
             auto res = cli.Get("/read?key=" + token); // send the key via a GET request
             if (res)
             {
-                std::cout << res->body << "\n";
+                if (res->body == "Key does not exist."){
+                    std::cout << res->body << "\n";
+                    continue;
+                }
+                std::ofstream ofs(token, std::ios::binary);
+                ofs << res->body;
+                ofs.close();
+                std::cout << "Image stored as " << token << " in present working directory\n";
             } 
             else
             {
@@ -128,6 +135,7 @@ int main() {
                 std::ofstream ofs("rotated.jpg", std::ios::binary);
                 ofs << res->body;
                 ofs.close();
+                std::cout << "Rotated data saved in rotated.jpg\n";
             } 
             else
             {

@@ -6,12 +6,18 @@
 #include <cassandra.h>
 #include <iostream>
 #include <fstream>
+#include "include/httplib.h"
+
+#define DB_IP "127.0.0.1"
+#define DB_port 5001
 
 int main()
 {
+    httplib::Server db_svr; // used to communicate between server and database
+
     // 1. Connect to Cassandra
     CassCluster* cluster = cass_cluster_new();
-    cass_cluster_set_contact_points(cluster, "127.0.0.1");
+    cass_cluster_set_contact_points(cluster, DB_IP);
 
     CassSession* session = cass_session_new();
     CassFuture* connect_future = cass_session_connect(session, cluster);
@@ -46,10 +52,72 @@ int main()
     cass_statement_free(stmt);
     cass_future_free(future);
 
+    const char* query;
+    std::string key, img;
+    db_svr.Post("/create", [&](const httplib::Request& req, httplib::Response& res){
+        auto it = req.form.files.find("file");
+        const auto& file = it->second;
+
+        key = file.filename;
+        img = file.content;
+
+        query =
+        "INSERT INTO image_store (image_id, image_data) "
+        "VALUES (?, ?);";
+
+        stmt = cass_statement_new(query, 2);
+        cass_statement_bind_string(stmt, 0, key.c_str());
+        cass_statement_bind_bytes(stmt, 1, reinterpret_cast<const cass_byte_t*>(img.data()), img.size());
+
+        future = cass_session_execute(session, stmt);
+        cass_future_wait(future);
+
+        if (cass_future_error_code(future) == CASS_OK)
+            std::cout << "Image " << key << " stored successfully.\n";
+        else
+            std::cerr << "Insert failed.\n";
+
+        cass_statement_free(stmt);
+        cass_future_free(future);
+    });
+
+    db_svr.Get("/read", [&](const httplib::Request& req, httplib::Response& res){
+        std::string key = req.get_param_value("key");
+        std::string value;
+        query = "SELECT image_data from image_store where image_id=?;";
+        stmt = cass_statement_new(query, 1);
+        cass_statement_bind_string(stmt, 0, key.c_str());
+        future = cass_session_execute(session, stmt);
+        cass_future_wait(future);
+
+        if (cass_future_error_code(future) != CASS_OK)
+            std::cerr << "Read failed.\n";
+        
+        const CassResult* result = cass_future_get_result(future);
+        if (result != nullptr && cass_result_row_count(result) > 0)
+        {
+            // Get first (and only) row
+            const CassRow* row = cass_result_first_row(result);
+            const CassValue* img_val = cass_row_get_column_by_name(row, "image_data");
+
+            // get the image data as bytes
+            const cass_byte_t* img_bytes;
+            size_t img_size;
+            cass_value_get_bytes(img_val, &img_bytes, &img_size);
+
+            std::string img_data(reinterpret_cast<const char*>(img_bytes), img_size); // send this
+            res.set_content(img_data, "image/jpeg");
+        }
+        if (result != nullptr && cass_result_row_count(result) == 0)
+        {
+            res.set_content("Key does not exist.", "text/plain");
+        }
+    });
+    
     // arbitrary addition
         
     // Read the image file as a string
-    std::ifstream file("img/african_elephant/001.jpg", std::ios::binary);
+    /*std::ifstream file("img/african_elephant/001.jpg", std::ios::binary);
     std::string img((std::istreambuf_iterator<char>(file)),
                      std::istreambuf_iterator<char>());
 
@@ -71,9 +139,9 @@ int main()
 
     cass_statement_free(stmt);
     cass_future_free(future);
-
+*/
     //read
-    query = "SELECT image_data from image_store where image_id=?;";
+    /*query = "SELECT image_data from image_store where image_id=?;";
     stmt = cass_statement_new(query, 1);
     cass_statement_bind_string(stmt, 0, key.c_str());
     future = cass_session_execute(session, stmt);
@@ -109,7 +177,7 @@ int main()
     }
     cass_statement_free(stmt);
     cass_future_free(future);
-    
+    */
     // delete 
     query = "DELETE FROM image_store WHERE image_id = ?;";
     stmt = cass_statement_new(query, 1);
@@ -124,9 +192,7 @@ int main()
     cass_statement_free(stmt);
     cass_future_free(future);
     
-    //while (1)
-    //{
-            //wait for requests from server  
-    //}
+    
+    db_svr.listen(DB_IP, DB_port); // start listening.
 
 }
