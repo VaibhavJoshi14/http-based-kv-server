@@ -9,6 +9,7 @@
 #include <fstream>
 #include <opencv2/opencv.hpp>
 #include <vector>
+#include <sched.h>
 
 using namespace cv;
 
@@ -16,6 +17,8 @@ using namespace cv;
 #define port 5000
 #define CACHE_SIZE 5
 #define DATABASE_ADDRESS "http://127.0.0.1:5001"
+#define CPU_core_id 0 // used to pin the process to core. used for load testing.
+
 // I should be able to generate two different workloads, one that is CPU bound, and other that is I/O bound.
 // 1. Uploading an image to a server (IO bottleneck in the database server).
 // 2. Rotate an image in the server (that user sends) and send it as a response (CPU bottleneck in the server). Optionally send the response to be saved/updated in the database.
@@ -55,6 +58,20 @@ void store_in_cache(std::unordered_map<std::string, std::string>& CACHE,
 
 int main()
 {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);          // Clear the CPU set
+    CPU_SET(CPU_core_id, &cpuset);  // Add core_id to the set
+
+    pid_t pid = getpid();  // Current process ID
+
+    // Set CPU affinity for this process
+    if (sched_setaffinity(pid, sizeof(cpu_set_t), &cpuset) != 0) {
+        perror("sched_setaffinity");
+        return 1;
+    }
+
+    std::cout << "Pinned server process " << pid << " to CPU core " << CPU_core_id << std::endl;
+
     httplib::Server svr;
     std::unordered_map<std::string, std::string> CACHE; // Hash table as a cache to store kv pairs.
     std::list<std::string> queue_of_keys; // stores the order in which keys arrive. std::list is implemented as a doubly-linked list.

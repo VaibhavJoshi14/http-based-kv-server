@@ -8,12 +8,28 @@
 #include <iostream>
 #include <fstream>
 #include "include/httplib.h"
+#include <sched.h>
 
 #define DB_IP "127.0.0.1"
 #define DB_port 5001
+#define CPU_core_id 1 // used to pin the process to core. used for load testing.
 
 int main()
 {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);          // Clear the CPU set
+    CPU_SET(CPU_core_id, &cpuset);  // Add core_id to the set
+
+    pid_t pid = getpid();  // Current process ID
+
+    // Set CPU affinity for this process
+    if (sched_setaffinity(pid, sizeof(cpu_set_t), &cpuset) != 0) {
+        perror("sched_setaffinity");
+        return 1;
+    }
+
+    std::cout << "Pinned database process " << pid << " to CPU core " << CPU_core_id << std::endl;
+
     httplib::Server db_svr; // used to communicate between server and database
 
     // 1. Connect to Cassandra

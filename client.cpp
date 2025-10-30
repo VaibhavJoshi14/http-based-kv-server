@@ -27,11 +27,27 @@ rotate2 takes the image <key> from database, and saves it in the database (does 
 
 #include "include/httplib.h"
 #include <fstream>
+#include <sched.h>
 
 #define SERVER_ADDRESS "http://127.0.0.1:5000"
+#define CPU_core_id 2 // used to pin the process to core. used for load testing.
 
 
 int main() {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);          // Clear the CPU set
+    CPU_SET(CPU_core_id, &cpuset);  // Add core_id to the set
+
+    pid_t pid = getpid();  // Current process ID
+
+    // Set CPU affinity for this process
+    if (sched_setaffinity(pid, sizeof(cpu_set_t), &cpuset) != 0) {
+        perror("sched_setaffinity");
+        return 1;
+    }
+
+    std::cout << "Pinned client process " << pid << " to CPU core " << CPU_core_id << std::endl;
+
     httplib::Client cli(SERVER_ADDRESS); // IP:Port of server.
     std::string request;
     std::string token;
