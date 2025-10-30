@@ -210,6 +210,93 @@ int main()
         res.set_content(rotated_data, "image/jpeg");
     });
 
+    // For the rotate2 command: which takes a key and an angle as an input and rotates the image by that angle in counter-clockwise direction, and saves it in the database
+    svr.Post("/rotate2", [&](const httplib::Request& req, httplib::Response& res){
+        std::string key = req.get_param_value("key");
+        int angle = std::stoi(req.get_param_value("angle"));
+        std::string img_data;
+        
+        // Get the image.
+        m.lock();
+        if (CACHE.count(key)) // If key is already in cache, then fetch from it directly.
+        {
+            //std::cout << "CACHE used\n"; // used for debugging
+            img_data = CACHE[key];
+            m.unlock();
+        }
+        else // Else fetch from database.
+        {
+            m.unlock();
+            auto res2 = db_cli.Get("/read?key=" + key);
+            if (!res2 || res2->status != 200) 
+            {
+                std::cout << "Error in database while reading\n";
+                res.set_content("An error occurred in the database.", "text/plain");
+                return;
+            }
+            // Store the key-value pair in cache since it is not in cache
+            store_in_cache(CACHE, queue_of_keys, key, res2->body);
+            img_data = res2->body;
+        }
+        
+        // Convert binary string to vector<uchar> for OpenCV decoding
+        std::vector<uchar> buffer(img_data.begin(), img_data.end());
+
+        // Decode image from memory
+        Mat img = imdecode(buffer, IMREAD_COLOR);
+        if (img.empty()) {
+            std::cerr << "Error: could not decode image data." << std::endl;
+            res.set_content("Error: could not decode image data.", "text/plain");
+            return;
+        }
+
+        // Get the rotation matrix
+        Point2f center(img.cols / 2.0F, img.rows / 2.0F);
+
+        Mat rotation_matrix = getRotationMatrix2D(center, angle, 1);
+
+        // Compute bounding box so that the rotated image fits completely
+        Rect2f bbox = RotatedRect(Point2f(), img.size(), angle).boundingRect2f();
+
+        // Adjust transformation matrix to keep image centered
+        rotation_matrix.at<double>(0, 2) += bbox.width / 2.0 - img.cols / 2.0;
+        rotation_matrix.at<double>(1, 2) += bbox.height / 2.0 - img.rows / 2.0;
+
+        // Apply the rotation
+        Mat rotated;
+        warpAffine(img, rotated, rotation_matrix, bbox.size());
+
+        // Encode rotated image back to binary string (e.g. JPEG)
+        std::vector<uchar> out_buf;
+        imencode(".jpg", rotated, out_buf);
+
+        // Convert back to std::string
+        std::string rotated_data(out_buf.begin(), out_buf.end());
+
+        // send to the database for saving.
+        // INSERT on the same key UPDATEs the key in cassandra.
+        
+        // Multipart form upload
+        httplib::UploadFormDataItems items = {
+            {"file", rotated_data, key, "image/jpeg"}
+        };
+
+        // send to database for persistent storage
+        auto res3 = db_cli.Post("/create", items);
+        if (!res3 || res3->status != 200)
+        {
+            std::cout << "Error: Could not update key in database.";
+            res.set_content("An error occurred in the database.", "text/plain");
+            return;
+        }
+        // If key was in cache, we also need to update the cache.
+        if (CACHE.count(key))
+        {
+            CACHE[key] = rotated_data;
+        }
+        res.set_content("Image " + key + " rotated and saved in database.", "image/jpeg");
+    });
+
     std::cout << "Server started at "<< IP << ":"<< port <<"\n";
     fflush(stdout);
 

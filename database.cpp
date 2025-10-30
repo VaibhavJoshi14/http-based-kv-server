@@ -3,6 +3,7 @@
     -I/usr/local/include \
     -L/usr/local/lib -lcassandra -luv
 */
+// Use cqlsh if u want to run apache_cassandra on shell. 
 #include <cassandra.h>
 #include <iostream>
 #include <fstream>

@@ -146,6 +146,26 @@ int main() {
                 std::cout << "Request failed\n";
             }
         }
+        else if (token == "rotate2")
+        {
+            std::string angle, key;
+            std::getline(iss, angle, ' ');
+            std::getline(iss, key, '\0');
+
+            params.emplace("key", key);
+            params.emplace("angle", angle);
+            auto res = cli.Post("/rotate2", params);
+            if (res)
+            {
+                std::cout << res->body << "\n";
+            }
+            else
+            {
+                std::cout << "Request failed\n";
+            }
+            params.erase("key");
+            params.erase("angle");
+        }
         
     }
 
