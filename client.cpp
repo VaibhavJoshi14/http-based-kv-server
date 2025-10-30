@@ -1,30 +1,3 @@
-/*
-key is a string, value is the path to an image (only 256x256 jpg images allowed).
-key can be simply the name of the image.
-
-create should store the image to the database with key k. (IO bound)
-    create <key> <path to image>
-    create 000.jpg img/african_elephant/000.jpg
-
-read should return the image saved on database
-    read <key>
-    read 000.jpg
-
-delete should delete the image from the database
-    delete <key>
-    delete 000.jpg
-
-rotate the image sent to the server by some degrees, and then return the image. do not save the image on database.
-use create to separately save the image. (leads to CPU bound process)
-    rotate <angle degrees> <path to image>
-    rotate 45 /img/african_elephant/000.jpg
-
-rotate2 takes the image <key> from database, and saves it in the database (does not return the image to the user)
-    rotate2 <angle degrees> <key>
-    rotate2 45 000.jpg
-
-*/
-
 #include "include/httplib.h"
 #include <fstream>
 #include <sched.h>

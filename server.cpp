@@ -1,5 +1,3 @@
-// compile using 
-// g++ server.cpp -o server `pkg-config --cflags --libs opencv4`
 #include "include/httplib.h"
 #include <iostream>
 #include <unordered_map>
@@ -18,26 +16,6 @@ using namespace cv;
 #define CACHE_SIZE 5
 #define DATABASE_ADDRESS "http://127.0.0.1:5001"
 #define CPU_core_id 0 // used to pin the process to core. used for load testing.
-
-// I should be able to generate two different workloads, one that is CPU bound, and other that is I/O bound.
-// 1. Uploading an image to a server (IO bottleneck in the database server).
-// 2. Rotate an image in the server (that user sends) and send it as a response (CPU bottleneck in the server). Optionally send the response to be saved/updated in the database.
-
-// check browser on http://127.0.0.1/5000
-
-// cpp-httplib uses a thread-pool by default, so no need to work on it, written here https://github.com/yhirose/cpp-httplib/issues/415.
-
-// What does eviction mean in case of hash-table? When the hash-map has CACHE_SIZE number of elements, we will delete an element
-// from it. Choosing the FCFS replacement policy because it is easy to implement. We need to store separately the order in
-// which the keys arrive (stored in queue_of_keys queue).
-
-// Since it is a key-value type data, relational databases may not be perfectly suitable here. So using NoSQL database
-// Apache Cassandra (free and open source).
-// Installing instructions:  https://cassandra.apache.org/doc/latest/cassandra/installing/installing.html.
-// If cassandra hangs the system, then the OOM is killing cassandra because it is demanding too much heap. Reduce its max heap size (use gpt).
-// Cassandra takes 20 to 60 seconds to load after boot, so wait.
-
-// Server will connect to the database using http-based requests via tcp connection (not using rpc).
 
 // This function stores a (key, value) pair in the cache, evicting a pair if cache is already full.
 void store_in_cache(std::unordered_map<std::string, std::string>& CACHE,
