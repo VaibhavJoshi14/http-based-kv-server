@@ -1,5 +1,5 @@
 [linux machine]
+c++17
 apache cassandra server
-apache cassandra library
+apache cassandra c++ library
 opencv
-

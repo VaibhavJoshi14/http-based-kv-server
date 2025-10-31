@@ -36,13 +36,13 @@ I should be able to generate two different workloads, one that is CPU bound, and
 1. Uploading an image to a server (IO bottleneck in the database server).
 2. Rotate an image in the server (that user sends) and send it as a response (CPU bottleneck in the server).
 
-cpp-httplib uses a thread-pool by default, so no need to work on it, written here https://github.com/yhirose/cpp-httplib/issues/415.
+cpp-httplib uses a thread-pool by default, written here https://github.com/yhirose/cpp-httplib/issues/415.
 
 What does eviction mean in case of hash-table? When the hash-map has CACHE_SIZE number of elements, we will delete an element
 from it. Choosing the FCFS replacement policy because it is easy to implement. We need to store separately the order in
 which the keys arrive (stored in queue_of_keys queue).
 
-Since it is a key-value type data, relational databases may not be perfectly suitable here. So using NoSQL database Apache Cassandra (free and open source).  
+Since it is a key-value type data, relational databases may not be suitable here. So using NoSQL database Apache Cassandra (free and open source).  
 Installing instructions:  https://cassandra.apache.org/doc/latest/cassandra/installing/installing.html.
 If cassandra hangs the system, then the OOM may be killing cassandra because it is demanding too much heap. Reduce its max heap size (use gpt).  
 Cassandra takes 20 to 60 seconds to load after boot, so wait.
@@ -51,6 +51,8 @@ Server will connect to the database using http-based requests via tcp connection
 
 Each process has been pinned to a separate core for load testing purpose.
 
+Do 'sudo systemctl start cassandra' before running database, wait for a minute for cassandra to start.
+ 
 ### Dependencies
 1. cpp-httplib (for http request/response)
 2. Apache cassandra (for database)

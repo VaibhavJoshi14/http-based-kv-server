@@ -85,9 +85,10 @@ int main()
         cass_future_wait(future);
 
         if (cass_future_error_code(future) == CASS_OK)
-            std::cout << "Image " << key << " stored successfully.\n";
+        {    //std::cout << "Image " << key << " stored successfully.\n";
+        }
         else
-            std::cerr << "Insert failed.\n";
+            std::cerr << "Insert " << key << " failed.\n";
 
         cass_statement_free(stmt);
         cass_future_free(future);
@@ -134,7 +135,8 @@ int main()
         future = cass_session_execute(session, stmt);
         cass_future_wait(future);
         if (cass_future_error_code(future) == CASS_OK)
-            std::cout << "Image " << key<< " deleted successfully.\n";
+        {   //std::cout << "Image " << key<< " deleted successfully.\n"; 
+        }
         else
             std::cerr << "Delete failed.\n";
         cass_statement_free(stmt);

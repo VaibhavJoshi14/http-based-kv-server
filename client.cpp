@@ -53,7 +53,7 @@ int main() {
 
             // Multipart form upload
             httplib::UploadFormDataItems items = {
-                {"file", data, key, "image/jpg"}
+                {"file", data, key, "image/jpeg"}
             };
 
             auto res = cli.Post("/create", items);
@@ -119,7 +119,7 @@ int main() {
 
             // Multipart form upload
             httplib::UploadFormDataItems items = {
-                {"file", img, angle, "image/jpg"}
+                {"file", img, angle, "image/jpeg"}
             };
 
             auto res = cli.Post("/rotate", items);
