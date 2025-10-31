@@ -1,5 +1,5 @@
 # HTTP-Based Key-Value Server
-This is an implementation of a key-value server which stores image names as keys, and values as images. The server stores two purpose: to store and retrieve images, and rotate image by a user-specified angle.
+This is an implementation of a key-value server which stores image names as keys, and values as images. The server serves two purpose: to store and retrieve images, and rotate image by a user-specified angle.
 
 # Installation
 To install, first install dependencies in docs/requirements.txt.  
