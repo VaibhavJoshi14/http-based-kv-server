@@ -15,7 +15,7 @@ namespace fs = std::filesystem;
 using namespace std::chrono;
 
 #define SERVER_ADDRESS "http://127.0.0.1:5000"
-#define CPU_core_id 2 // used to pin the process to core. used for load testing.
+#define CPU_core_id 2 // used to pin the process to core.
 int numthreads;
 int duration_seconds; // each thread will run for this duration.
 // Read all the images at once, since reading images from disk would take considerable time during load test, slowing 
@@ -24,10 +24,13 @@ std::vector<std::string> images;
 std::unordered_map<std::string, std::string> images_sent;
 std::vector<std::string> keys; // the keys used to send the images
 int numimages;
+std::vector<double> avg_throughput;
+std::vector<double> avg_response_time;
+std::vector<int> num_requests;
 
 void create_all(int id)
 {
-    // each thread sends images with keys (to_string(id) + to_string(i)). sends the same set of images, but with
+    // each thread sends images with keys (std::to_string(id) + std::to_string(i)). sends the same set of images, but with
     // different keys, so every request gets executed on database.
     httplib::Client cli(SERVER_ADDRESS); // IP:Port of server.
     int i = 0;
@@ -44,18 +47,26 @@ void create_all(int id)
             {"file", images[i % numimages], key, "image/jpeg"}
         };
 
-        // send to server
+        auto curr = std::chrono::high_resolution_clock::now();
+        
         auto res = cli.Post("/create", items);
-        if (res)
-        {  
+        
+        auto end = std::chrono::high_resolution_clock::now();
+        
+        if (res) // successful completion of request
+        {
+            avg_throughput[id] += 1;
         } 
         else
         {
             std::cout << "Create request failed\n";
         }
-        auto end = std::chrono::high_resolution_clock::now();
+
         elapsed = end - start;
-        
+        auto resp_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - curr);
+        avg_response_time[id] += resp_time.count();
+        num_requests[id]++;
+
     }while (elapsed.count() < duration_seconds);
 }
 
@@ -76,7 +87,11 @@ void read_all(int id)
             i = 0;
             key = _id_ + std::to_string(i);
         }
+        auto curr = std::chrono::high_resolution_clock::now();
+
         auto res = cli.Get("/read?key=" + key); // send the key via a GET request
+        
+        auto end = std::chrono::high_resolution_clock::now();
         if (res)
         {
             if (res->body == "Key does not exist."){
@@ -87,13 +102,17 @@ void read_all(int id)
                 std::cout << res->body << "\n";
                 continue;
             }
+            avg_throughput[id] += 1;
         }
         else
         {
             std::cout << "Read request failed\n";
         }
-        auto end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
+        auto resp_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - curr);
+        avg_response_time[id] += resp_time.count();
+        num_requests[id]++;
+
     }while (elapsed.count() < duration_seconds);
 
 }
@@ -128,16 +147,22 @@ void rotate_all(int id)
         httplib::UploadFormDataItems items = {
             {"file", images_sent[key], angle, "image/jpeg"}
         };
+        auto curr = std::chrono::high_resolution_clock::now();
         auto res = cli.Post("/rotate", items);
+        auto end = std::chrono::high_resolution_clock::now();
         if (res)
         {
+            avg_throughput[id] += 1;
         }
         else
         {
             std::cout << "Rotate request failed\n";
         }
-        auto end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
+        auto resp_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - curr);
+        avg_response_time[id] += resp_time.count();
+        num_requests[id]++;
+
     }while (elapsed.count() < duration_seconds);
 }
 
@@ -161,19 +186,26 @@ void delete_all(int id)
             key = _id_ + std::to_string(i);
         }
         params.emplace("key", key);
+
+        auto curr = std::chrono::high_resolution_clock::now();
         auto res = cli.Post("/delete", params);
+        auto end = std::chrono::high_resolution_clock::now();
+
         if (res)
         {
             images_sent.erase(key);
+            avg_throughput[id] += 1;
         } 
         else
         {
             std::cout << "Delete request failed\n";
         }
         params.erase("key");
-        
-        auto end = std::chrono::high_resolution_clock::now();
         elapsed = end - start;
+        auto resp_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - curr);
+        avg_response_time[id] += resp_time.count();
+        num_requests[id]++;
+
     }while (elapsed.count() < duration_seconds);
 }
 
@@ -229,28 +261,51 @@ int main(int argc, char* argv[])
     numthreads = std::stoi(argv[1]);
     duration_seconds = std::stoi(argv[2]) * 60; 
 
+    avg_throughput.resize(numthreads);
+    avg_response_time.resize(numthreads);
+    num_requests.resize(numthreads);
+
     // create_all(): each client will run this. (IO bound)
     std::cout << "---------------------------------------------------------------\n";
     std::cout << "Starting create_all load test\n";
+    std::fill(avg_throughput.begin(), avg_throughput.end(), 0);
+    std::fill(avg_response_time.begin(), avg_response_time.end(), 0);
+    std::fill(num_requests.begin(), num_requests.end(), 0);
 
     std::vector<std::thread> threads;
 
     // launch multiple threads
-    for (int i = 0; i < numthreads; ++i) {
+    for (int i = 0; i < numthreads; ++i)
+    {
         threads.emplace_back(create_all, i);  // create and start a new thread
     }
 
     // wait for all threads to finish
-    for (auto& t : threads) {
+    for (auto& t : threads)
+    {
         t.join();
     }
+
+    double avg_throug = 0, avg_resp = 0;
+    for (int i = 0; i < numthreads; ++i)
+    {
+        avg_response_time[i] /= num_requests[i];
+        avg_throughput[i] /= duration_seconds;
+        avg_throug += avg_throughput[i];
+        avg_resp += avg_response_time[i];
+    }
+    avg_throug /= numthreads;
+    avg_resp /= numthreads;
     threads.clear();
 
     std::cout << "Completed create_all load test\n";
-    
+    std::cout << "Average throughput (requests succesfully completed/sec): " << avg_throug << std::endl << "Average response time: " << avg_resp << "(ms) \n";
     // get_all(): each client will run this.
     std::cout << "---------------------------------------------------------------\n";
     std::cout << "Starting read_all load test\n";
+    std::fill(avg_throughput.begin(), avg_throughput.end(), 0);
+    std::fill(avg_response_time.begin(), avg_response_time.end(), 0);
+    std::fill(num_requests.begin(), num_requests.end(), 0);
 
     // launch multiple threads
     for (int i = 0; i < numthreads; ++i) {
@@ -261,12 +316,28 @@ int main(int argc, char* argv[])
     for (auto& t : threads) {
         t.join();
     }
+    
+    avg_throug = 0, avg_resp = 0;
+    for (int i = 0; i < numthreads; ++i)
+    {
+        avg_response_time[i] /= num_requests[i];
+        avg_throughput[i] /= duration_seconds;
+        avg_throug += avg_throughput[i];
+        avg_resp += avg_response_time[i];
+    }
+    avg_throug /= numthreads;
+    avg_resp /= numthreads;
     threads.clear();
+
     std::cout << "Completed read_all load test\n";
+    std::cout << "Average throughput (requests succesfully completed/sec): " << avg_throug << std::endl << "Average response time: " << avg_resp << "(ms) \n";
     
     // rotate(): each client will run this. (CPU bound)
     std::cout << "---------------------------------------------------------------\n";
     std::cout << "Starting rotate_all load test\n";
+    std::fill(avg_throughput.begin(), avg_throughput.end(), 0);
+    std::fill(avg_response_time.begin(), avg_response_time.end(), 0);
+    std::fill(num_requests.begin(), num_requests.end(), 0);
 
     // launch multiple threads
     for (int i = 0; i < numthreads; ++i) {
@@ -277,12 +348,29 @@ int main(int argc, char* argv[])
     for (auto& t : threads) {
         t.join();
     }
+
+    avg_throug = 0, avg_resp = 0;
+    for (int i = 0; i < numthreads; ++i)
+    {
+        avg_response_time[i] /= num_requests[i];
+        avg_throughput[i] /= duration_seconds;
+        avg_throug += avg_throughput[i];
+        avg_resp += avg_response_time[i];
+    }
+    avg_throug /= numthreads;
+    avg_resp /= numthreads;
+
     threads.clear();
     std::cout << "Completed rotate_all load test\n";
+    std::cout << "Average throughput (requests succesfully completed/sec): " << avg_throug << std::endl << "Average response time: " << avg_resp << "(ms) \n";
+    
     std::cout << "---------------------------------------------------------------\n";
     
     // create_read_delete_mix():
     std::cout << "Starting mix_all load test\n";
+    std::fill(avg_throughput.begin(), avg_throughput.end(), 0);
+    std::fill(avg_response_time.begin(), avg_response_time.end(), 0);
+    std::fill(num_requests.begin(), num_requests.end(), 0);
 
     // launch multiple threads
     for (int i = 0; i < numthreads; ++i) {
@@ -293,13 +381,30 @@ int main(int argc, char* argv[])
     for (auto& t : threads) {
         t.join();
     }
+
+    avg_throug = 0, avg_resp = 0;
+    for (int i = 0; i < numthreads; ++i)
+    {
+        avg_response_time[i] /= num_requests[i];
+        avg_throughput[i] /= duration_seconds;
+        avg_throug += avg_throughput[i];
+        avg_resp += avg_response_time[i];
+    }
+    avg_throug /= numthreads;
+    avg_resp /= numthreads;
+
     threads.clear();
 
     std::cout << "Completed mix_all load test\n";
+    std::cout << "Average throughput (requests succesfully completed/sec): " << avg_throug << std::endl << "Average response time: " << avg_resp << "(ms) \n";
+    
     std::cout << "---------------------------------------------------------------\n";
 
     // delete_all(): 
     std::cout << "Starting delete_all load test\n";
+    std::fill(avg_throughput.begin(), avg_throughput.end(), 0);
+    std::fill(avg_response_time.begin(), avg_response_time.end(), 0);
+    std::fill(num_requests.begin(), num_requests.end(), 0);
 
     // launch multiple threads
     for (int i = 0; i < numthreads; ++i) {
@@ -310,8 +415,21 @@ int main(int argc, char* argv[])
     for (auto& t : threads) {
         t.join();
     }
+    
+    avg_throug = 0, avg_resp = 0;
+    for (int i = 0; i < numthreads; ++i)
+    {
+        avg_response_time[i] /= num_requests[i];
+        avg_throughput[i] /= duration_seconds;
+        avg_throug += avg_throughput[i];
+        avg_resp += avg_response_time[i];
+    }
+    avg_throug /= numthreads;
+    avg_resp /= numthreads;
+
     threads.clear();
     std::cout << "Completed delete_all load test\n";
+    std::cout << "Average throughput (requests succesfully completed/sec): " << avg_throug << std::endl << "Average response time: " << avg_resp << "(ms) \n";
     std::cout << "---------------------------------------------------------------\n";
     
 }

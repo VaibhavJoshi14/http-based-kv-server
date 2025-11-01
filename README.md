@@ -53,6 +53,8 @@ Each process has been pinned to a separate core for load testing purpose.
 
 Do 'sudo systemctl start cassandra' before running database, wait for a minute for cassandra to start.
  
+img/ is a subset of the ImageNet dataset.
+
 ### Dependencies
 1. cpp-httplib (for http request/response)
 2. Apache cassandra (for database)
