@@ -213,7 +213,7 @@ void delete_all(int id)
 void create_read_delete_mix(int id)
 {
     if (id % 3 == 0)
-        create_all(id + numthreads);
+        create_all(id);
     else if (id % 3 == 1)
         read_all(id);
     else
