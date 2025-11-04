@@ -5,6 +5,12 @@ This is an implementation of a key-value server which stores image names as keys
 To install, first install dependencies in docs/requirements.txt.  
 Then do make.
 
+# Run using the following commands
+1. ./client  
+2. ./server  
+3. ./database  
+4. ./ldgen &lt;num threads&gt; &lt;time in min&gt;  
+
 # Description and Usage
 For a client, 
 key is a string, value is the path to an image (only jpg/jpeg images allowed).  
