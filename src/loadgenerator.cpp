@@ -15,6 +15,7 @@ namespace fs = std::filesystem;
 using namespace std::chrono;
 
 #define SERVER_ADDRESS "http://127.0.0.1:5000"
+#define DATABASE_ADDRESS "http://127.0.0.1:5001"
 #define CPU_core_id 2 // used to pin the process to core.
 int numthreads;
 int duration_seconds; // each thread will run for this duration.
@@ -222,6 +223,9 @@ void create_read_delete_mix(int id)
 
 int main(int argc, char* argv[]) 
 {   
+    httplib::Client cli(SERVER_ADDRESS);
+    httplib::Client db_cli(DATABASE_ADDRESS);
+
     if (argc < 3)
     {
        fprintf(stderr,"usage \n%s <num_client_threads> <duration_minutes>\n", argv[0]);
@@ -285,6 +289,9 @@ int main(int argc, char* argv[])
     {
         t.join();
     }
+    
+    cli.Get("/printStatistics");
+    db_cli.Get("/printStatistics");
 
     double avg_throug = 0, avg_resp = 0;
     for (int i = 0; i < numthreads; ++i)
@@ -316,7 +323,11 @@ int main(int argc, char* argv[])
     for (auto& t : threads) {
         t.join();
     }
-    
+
+    // prints cpu, mem, disk utilization
+    cli.Get("/printStatistics");
+    db_cli.Get("/printStatistics");
+
     avg_throug = 0, avg_resp = 0;
     for (int i = 0; i < numthreads; ++i)
     {
@@ -339,6 +350,7 @@ int main(int argc, char* argv[])
     std::fill(avg_response_time.begin(), avg_response_time.end(), 0);
     std::fill(num_requests.begin(), num_requests.end(), 0);
 
+    
     // launch multiple threads
     for (int i = 0; i < numthreads; ++i) {
         threads.emplace_back(rotate_all, i);  // create and start a new thread
@@ -348,6 +360,9 @@ int main(int argc, char* argv[])
     for (auto& t : threads) {
         t.join();
     }
+
+    cli.Get("/printStatistics");
+    db_cli.Get("/printStatistics");
 
     avg_throug = 0, avg_resp = 0;
     for (int i = 0; i < numthreads; ++i)
@@ -365,7 +380,7 @@ int main(int argc, char* argv[])
     std::cout << "Average throughput (requests succesfully completed/sec): " << avg_throug << std::endl << "Average response time: " << avg_resp << "(ms) \n";
     
     std::cout << "---------------------------------------------------------------\n";
-    
+    /*
     // create_read_delete_mix():
     std::cout << "Starting mix_all load test\n";
     std::fill(avg_throughput.begin(), avg_throughput.end(), 0);
@@ -382,6 +397,9 @@ int main(int argc, char* argv[])
         t.join();
     }
 
+    cli.Get("/printStatistics");
+    db_cli.Get("/printStatistics");
+
     avg_throug = 0, avg_resp = 0;
     for (int i = 0; i < numthreads; ++i)
     {
@@ -397,7 +415,7 @@ int main(int argc, char* argv[])
 
     std::cout << "Completed mix_all load test\n";
     std::cout << "Average throughput (requests succesfully completed/sec): " << avg_throug << std::endl << "Average response time: " << avg_resp << "(ms) \n";
-    
+    */
     std::cout << "---------------------------------------------------------------\n";
 
     // delete_all(): 
@@ -416,6 +434,9 @@ int main(int argc, char* argv[])
         t.join();
     }
     
+    cli.Get("/printStatistics");
+    db_cli.Get("/printStatistics");
+
     avg_throug = 0, avg_resp = 0;
     for (int i = 0; i < numthreads; ++i)
     {

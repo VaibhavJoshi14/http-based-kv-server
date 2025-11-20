@@ -8,6 +8,10 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <sched.h>
+#include <csignal>
+#include <fstream>
+#include <unistd.h>
+#include <sys/sysinfo.h>
 
 using namespace cv;
 
@@ -16,6 +20,75 @@ using namespace cv;
 #define CACHE_SIZE 5
 #define DATABASE_ADDRESS "http://127.0.0.1:5001"
 #define CPU_core_id 0 // used to pin the process to core. used for load testing.
+
+struct CpuTimes {
+    long long user, nice, system, idle, iowait, irq, softirq;
+};
+
+unsigned long readIOTime() {
+    std::ifstream f("/sys/block/sda/stat");
+    unsigned long fields[11];
+    for (int i = 0; i < 11; i++)
+        f >> fields[i];
+    return fields[9];   // column 10: time spent doing I/O (ms)
+}
+
+CpuTimes readCPU() {
+    std::ifstream file("/proc/stat");
+    std::string cpu;
+    CpuTimes t;
+    file >> cpu >> t.user >> t.nice >> t.system >> t.idle >> t.iowait >> t.irq >> t.softirq;
+    return t;
+}
+
+unsigned long t1 = readIOTime();
+CpuTimes c1 = readCPU();
+
+void printStats() {
+    CpuTimes c2 = readCPU();
+
+    long long idle1 = c1.idle + c1.iowait;
+    long long idle2 = c2.idle + c2.iowait;
+
+    long long nonIdle1 = c1.user + c1.nice + c1.system + c1.irq + c1.softirq;
+    long long nonIdle2 = c2.user + c2.nice + c2.system + c2.irq + c2.softirq;
+
+    long long total1 = idle1 + nonIdle1;
+    long long total2 = idle2 + nonIdle2;
+
+    double totald = total2 - total1;
+    double idled = idle2 - idle1;
+
+    double cpu_percentage = (1.0 - idled / totald) * 100.0;
+
+    std::cout << "Percentage CPU used: " << cpu_percentage << "%\n";
+
+    unsigned long t2 = readIOTime();
+
+    double busy = t2 - t1;      // ms disk was busy
+    double interval = 5*60*1000;      // measurement window in ms. 5min is written here.
+
+    std::cout << "Percentage Disk used: " << (busy / interval) * 100.0 << "%\n";
+    
+    struct sysinfo info;
+    sysinfo(&info);
+
+    unsigned long total = info.totalram;
+    unsigned long free  = info.freeram;
+
+    // Adjust by memory unit size
+    total *= info.mem_unit;
+    free  *= info.mem_unit;
+
+    unsigned long used = total - free;
+
+    double p = (used / (double)total) * 100.0;
+
+    std::cout << "Percentage RAM used: " << p << "%\n";
+
+    exit(0);
+}
+
 
 // This function stores a (key, value) pair in the cache, evicting a pair if cache is already full.
 void store_in_cache(std::unordered_map<std::string, std::string>& CACHE,
@@ -290,6 +363,12 @@ int main()
             CACHE[key] = rotated_data;
         }
         res.set_content("Image " + key + " rotated and saved in database.", "image/jpeg");
+    });
+
+    svr.Get("/printStatistics", [&](const httplib::Request& req, httplib::Response& res){
+        printStats();
+        t1 = readIOTime();
+        c1 = readCPU();
     });
 
     std::cout << "Server started at "<< IP << ":"<< port <<"\n";
