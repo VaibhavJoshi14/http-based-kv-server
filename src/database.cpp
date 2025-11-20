@@ -77,9 +77,7 @@ void printStats() {
 
     double p = (used / (double)total) * 100.0;
 
-    std::cout << "Percentage RAM used: " << p << "%\n";
-
-    exit(0);
+    std::cout << "Percentage RAM used: " << p << "%\n\n";
 }
 
 
