@@ -41,8 +41,22 @@ CpuTimes readCPU() {
     return t;
 }
 
+unsigned long readMemKB(const std::string& key) {
+    std::ifstream f("/proc/meminfo");
+    std::string k;
+    unsigned long value;
+    std::string unit;
+
+    while (f >> k >> value >> unit) {
+        if (k == key + ":")
+            return value; // in KB
+    }
+    return 0;
+}
+
 unsigned long t1 = readIOTime();
 CpuTimes c1 = readCPU();
+
 
 void printStats() {
     CpuTimes c2 = readCPU();
@@ -70,21 +84,10 @@ void printStats() {
 
     std::cout << "Percentage Disk used: " << (busy / interval) * 100.0 << "%\n";
     
-    struct sysinfo info;
-    sysinfo(&info);
+    unsigned long total = readMemKB("MemTotal");
+    unsigned long avail = readMemKB("MemAvailable");
 
-    unsigned long total = info.totalram;
-    unsigned long free  = info.freeram;
-
-    // Adjust by memory unit size
-    total *= info.mem_unit;
-    free  *= info.mem_unit;
-
-    unsigned long used = total - free;
-
-    double p = (used / (double)total) * 100.0;
-
-    std::cout << "Percentage RAM used: " << p << "%\n\n";
+    std::cout << "Percentage RAM used: " << (double)(total - avail) / total * 100.0<< "%\n\n";
 
 }
 
