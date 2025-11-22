@@ -28,9 +28,19 @@ unsigned long readIOTime() {
 
 CpuTimes readCPU() {
     std::ifstream file("/proc/stat");
-    std::string cpu;
-    CpuTimes t;
-    file >> cpu >> t.user >> t.nice >> t.system >> t.idle >> t.iowait >> t.irq >> t.softirq;
+    std::string label;
+    CpuTimes t = {0};
+
+    std::string target = "cpu" + std::to_string(CPU_core_id);
+
+    while (file >> label) {
+        if (label == target) {
+            file >> t.user >> t.nice >> t.system >> t.idle
+                 >> t.iowait >> t.irq >> t.softirq;
+            break;
+        }
+        file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    }
     return t;
 }
 
