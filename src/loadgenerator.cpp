@@ -297,11 +297,10 @@ int main(int argc, char* argv[])
     for (int i = 0; i < numthreads; ++i)
     {
         avg_response_time[i] /= num_requests[i];
-        avg_throughput[i] /= duration_seconds;
         avg_throug += avg_throughput[i];
         avg_resp += avg_response_time[i];
     }
-    avg_throug /= numthreads;
+    avg_throug /= duration_seconds;
     avg_resp /= numthreads;
     threads.clear();
 
@@ -332,11 +331,10 @@ int main(int argc, char* argv[])
     for (int i = 0; i < numthreads; ++i)
     {
         avg_response_time[i] /= num_requests[i];
-        avg_throughput[i] /= duration_seconds;
         avg_throug += avg_throughput[i];
         avg_resp += avg_response_time[i];
     }
-    avg_throug /= numthreads;
+    avg_throug /= duration_seconds;
     avg_resp /= numthreads;
     threads.clear();
 
@@ -368,12 +366,12 @@ int main(int argc, char* argv[])
     for (int i = 0; i < numthreads; ++i)
     {
         avg_response_time[i] /= num_requests[i];
-        avg_throughput[i] /= duration_seconds;
         avg_throug += avg_throughput[i];
         avg_resp += avg_response_time[i];
     }
-    avg_throug /= numthreads;
+    avg_throug /= duration_seconds;
     avg_resp /= numthreads;
+    threads.clear();
 
     threads.clear();
     std::cout << "Completed rotate_all load test\n";
@@ -415,7 +413,7 @@ int main(int argc, char* argv[])
 
     std::cout << "Completed mix_all load test\n";
     std::cout << "Average throughput (requests succesfully completed/sec): " << avg_throug << std::endl << "Average response time: " << avg_resp << "(ms) \n";
-    */
+    
     std::cout << "---------------------------------------------------------------\n";
 
     // delete_all(): 
@@ -452,5 +450,5 @@ int main(int argc, char* argv[])
     std::cout << "Completed delete_all load test\n";
     std::cout << "Average throughput (requests succesfully completed/sec): " << avg_throug << std::endl << "Average response time: " << avg_resp << "(ms) \n";
     std::cout << "---------------------------------------------------------------\n";
-    
+    */
 }
